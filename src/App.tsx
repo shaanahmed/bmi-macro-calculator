@@ -97,7 +97,7 @@ function InputField({ label, value, onChange, min, max, unit }: InputFieldProps)
           fontFamily: "'DM Mono', monospace",
           fontSize: "10px",
           letterSpacing: "0.15em",
-          textTransform: "uppercase" as const,
+          textTransform: "uppercase",
           marginBottom: "6px",
         }}
       >
@@ -143,7 +143,7 @@ function MacroBar({ label, grams, calories, totalCals, accent }: MacroBarProps) 
             fontFamily: "'DM Mono', monospace",
             fontSize: "11px",
             letterSpacing: "0.1em",
-            textTransform: "uppercase" as const,
+            textTransform: "uppercase",
           }}
         >
           {label}
@@ -187,7 +187,7 @@ function MacroBar({ label, grams, calories, totalCals, accent }: MacroBarProps) 
           fontFamily: "'DM Mono', monospace",
           fontSize: "10px",
           marginTop: "3px",
-          textAlign: "right" as const,
+          textAlign: "right",
           transition: "color 0.2s",
         }}
       >
@@ -255,7 +255,7 @@ function SystemIntel({ results, goalIdx }: SystemIntelProps) {
             fontFamily: "'DM Mono', monospace",
             fontSize: "9px",
             letterSpacing: "0.25em",
-            textTransform: "uppercase" as const,
+            textTransform: "uppercase",
           }}
         >
           System Intel
@@ -269,7 +269,7 @@ function SystemIntel({ results, goalIdx }: SystemIntelProps) {
               fontFamily: "'DM Mono', monospace",
               fontSize: "9px",
               letterSpacing: "0.1em",
-              whiteSpace: "nowrap" as const,
+              whiteSpace: "nowrap",
               paddingTop: "1px",
               minWidth: "60px",
             }}
@@ -306,7 +306,6 @@ export default function App() {
 
   const resultsRef = useRef<HTMLDivElement>(null);
 
-  // Convert to metric for calculations
   const weightKg = unit === "imperial" ? weight * 0.453592 : weight;
   const heightCm = unit === "imperial" ? height * 2.54 : height;
 
@@ -332,36 +331,35 @@ export default function App() {
 
   const goal = goals[goalIdx];
 
-  // ─── PDF Export via html2canvas + jsPDF ──────────────────────────────────
+  // ─── PDF Export Logic ──────────────────────────────────────────────────────
 
   const exportPDF = async (): Promise<void> => {
-    if (!resultsRef.current || !results) return;
+    if (!resultsRef.current) return;
     setExporting(true);
+
     try {
       const element = resultsRef.current;
       
-      // Force html2canvas to capture the entire scroll height, preventing cutoffs
+      // scrollY: -window.scrollY is the critical fix to prevent the viewport from cutting off the canvas
       const canvas = await html2canvas(element, {
         backgroundColor: "#0a1628",
         scale: 2,
         useCORS: true,
         logging: false,
-        height: element.scrollHeight,
-        windowHeight: element.scrollHeight,
-        width: element.scrollWidth,
-        windowWidth: element.scrollWidth
+        scrollY: -window.scrollY, 
       });
       
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      
       const pdfW = pdf.internal.pageSize.getWidth();
-      const pdfH = (canvas.height * pdfW) / canvas.width;
+      const pdfH = pdf.internal.pageSize.getHeight();
 
-      // Dark background fill for the entire A4 page
+      // Draw background
       pdf.setFillColor(2, 8, 23);
-      pdf.rect(0, 0, pdfW, pdf.internal.pageSize.getHeight(), "F");
+      pdf.rect(0, 0, pdfW, pdfH, "F");
 
-      // Header Text
+      // Draw Header
       pdf.setFont("helvetica", "bold");
       pdf.setFontSize(18);
       pdf.setTextColor(226, 232, 240);
@@ -374,11 +372,27 @@ export default function App() {
       pdf.setLineWidth(0.4);
       pdf.line(20, 27, pdfW - 20, 27);
 
-      // Render the captured Results snapshot
-      pdf.addImage(imgData, "PNG", 10, 32, pdfW - 20, pdfH - 10);
+      // Scale Image to strictly fit within the A4 page boundaries
+      const marginX = 10;
+      const startY = 32;
+      const maxImgW = pdfW - (marginX * 2);
+      const maxImgH = pdfH - startY - 15; // Reserve 15mm at bottom for footer
 
-      // Footer Text
-      const footerY = pdf.internal.pageSize.getHeight() - 8;
+      let finalImgW = maxImgW;
+      let finalImgH = (canvas.height * finalImgW) / canvas.width;
+
+      if (finalImgH > maxImgH) {
+        finalImgH = maxImgH;
+        finalImgW = (canvas.width * finalImgH) / canvas.height;
+      }
+
+      const xOffset = (pdfW - finalImgW) / 2;
+      
+      // Render snapshot
+      pdf.addImage(imgData, "PNG", xOffset, startY, finalImgW, finalImgH);
+
+      // Draw Footer
+      const footerY = pdfH - 8;
       pdf.setDrawColor(30, 41, 59);
       pdf.setLineWidth(0.3);
       pdf.line(20, footerY - 3, pdfW - 20, footerY - 3);
@@ -390,11 +404,10 @@ export default function App() {
       pdf.save(`bcs-report-${Date.now()}.pdf`);
     } catch (err) {
       console.error("PDF export failed:", err);
+    } finally {
+      setExporting(false);
     }
-    setExporting(false);
   };
-
-  // ─── Unit toggle with value conversion ───────────────────────────────────
 
   const toggleUnit = (): void => {
     const isMetric = unit === "metric";
@@ -406,11 +419,9 @@ export default function App() {
   const weightUnit = unit === "metric" ? "kg" : "lbs";
   const heightUnit = unit === "metric" ? "cm" : "in";
 
-  // ─── Shared style tokens ──────────────────────────────────────────────────
-
   const mono: React.CSSProperties = { fontFamily: "'DM Mono', monospace" };
   const card: React.CSSProperties = { background: "#0a1628", border: "1px solid #1e293b", borderRadius: "8px", padding: "28px" };
-  const labelStyle: React.CSSProperties = { ...mono, color: "#64748b", fontSize: "10px", letterSpacing: "0.15em", textTransform: "uppercase" as const, display: "block", marginBottom: "6px" };
+  const labelStyle: React.CSSProperties = { ...mono, color: "#64748b", fontSize: "10px", letterSpacing: "0.15em", textTransform: "uppercase", display: "block", marginBottom: "6px" };
   const sectionDivider: React.CSSProperties = { borderBottom: "1px solid #1e293b", marginBottom: "22px", paddingBottom: "22px" };
 
   return (
@@ -431,8 +442,8 @@ export default function App() {
 
       <div style={{ minHeight: "100vh", background: "#020817", padding: "32px 20px" }}>
         <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
-
-          {/* ── Header ── */}
+          
+          {/* Header */}
           <div style={{ marginBottom: "28px", borderBottom: "1px solid #1e293b", paddingBottom: "20px", display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: "16px" }}>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
@@ -446,7 +457,6 @@ export default function App() {
               </h1>
             </div>
 
-            {/* Unit Toggle */}
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <span style={{ ...mono, color: "#334155", fontSize: "10px", letterSpacing: "0.1em" }}>UNIT</span>
               <button
@@ -462,16 +472,14 @@ export default function App() {
             </div>
           </div>
 
-          {/* ── Two-column grid ── */}
           <div className="bcs-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
-
-            {/* ── LEFT: Inputs ── */}
+            
+            {/* Inputs Container */}
             <div style={card}>
               <p style={{ ...mono, color: "#334155", fontSize: "10px", letterSpacing: "0.2em", textTransform: "uppercase", marginBottom: "22px" }}>
                 ⬡ Parameters
               </p>
 
-              {/* Gender */}
               <div style={{ marginBottom: "16px" }}>
                 <label style={labelStyle}>Gender</label>
                 <div style={{ display: "flex", gap: "8px" }}>
@@ -491,13 +499,12 @@ export default function App() {
               <InputField label="Weight" value={weight} onChange={setWeight} min={1} max={1000} unit={weightUnit} />
               <InputField label="Height" value={height} onChange={setHeight} min={1} max={300} unit={heightUnit} />
 
-              {/* Activity */}
               <div style={{ marginBottom: "16px" }}>
                 <label style={labelStyle}>Activity Level</label>
                 <select
                   value={activityIdx}
                   onChange={(e) => setActivityIdx(Number(e.target.value))}
-                  style={{ width: "100%", background: "#0f172a", border: "1px solid #1e293b", borderRadius: "4px", color: "#e2e8f0", ...mono, fontSize: "13px", padding: "10px 14px", outline: "none", cursor: "pointer", appearance: "none" as const }}
+                  style={{ width: "100%", background: "#0f172a", border: "1px solid #1e293b", borderRadius: "4px", color: "#e2e8f0", ...mono, fontSize: "13px", padding: "10px 14px", outline: "none", cursor: "pointer", appearance: "none" }}
                 >
                   {activityLevels.map((a, i) => (
                     <option key={i} value={i}>{a.label} — {a.desc}</option>
@@ -505,7 +512,6 @@ export default function App() {
                 </select>
               </div>
 
-              {/* Goal */}
               <div>
                 <label style={labelStyle}>Goal</label>
                 <div style={{ display: "flex", gap: "8px" }}>
@@ -523,7 +529,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* ── RIGHT: Results ── */}
+            {/* Results Container */}
             <div className="bcs-sticky" style={{ position: "sticky", top: "20px", height: "fit-content" }}>
               {results ? (
                 <div ref={resultsRef} style={card}>
@@ -531,7 +537,6 @@ export default function App() {
                     ⬡ Results
                   </p>
 
-                  {/* BMI */}
                   <div style={sectionDivider}>
                     <div style={{ ...mono, color: "#475569", fontSize: "10px", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: "4px" }}>
                       Body Mass Index
@@ -546,7 +551,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Calories */}
                   <div style={sectionDivider}>
                     <div style={{ ...mono, color: "#475569", fontSize: "10px", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: "4px" }}>
                       Target Calories / {goal.label}
@@ -567,7 +571,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Macros */}
                   <div>
                     <div style={{ ...mono, color: "#475569", fontSize: "10px", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: "14px" }}>
                       Daily Macros
@@ -576,7 +579,6 @@ export default function App() {
                     <MacroBar label="Carbs" grams={results.carbG} calories={results.carbCal} totalCals={results.targetCals} accent="#fbbf24" />
                     <MacroBar label="Fat" grams={results.fatG} calories={results.fatCal} totalCals={results.targetCals} accent="#60a5fa" />
 
-                    {/* Split bar */}
                     <div style={{ marginTop: "12px", padding: "10px 12px", background: "#0f172a", borderRadius: "4px", border: "1px solid #1e293b" }}>
                       <div style={{ ...mono, color: "#334155", fontSize: "9px", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: "6px" }}>
                         Macro Split
@@ -596,11 +598,12 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* System Intel */}
                   <SystemIntel results={results} goalIdx={goalIdx} />
 
-                  {/* Export PDF */}
-                  <ExportButton exporting={exporting} onClick={exportPDF} />
+                  {/* Added data-html2canvas-ignore to hide button in PDF */}
+                  <div data-html2canvas-ignore="true">
+                    <ExportButton exporting={exporting} onClick={exportPDF} />
+                  </div>
                 </div>
               ) : (
                 <div style={{ ...card, textAlign: "center", padding: "48px 28px" }}>
@@ -646,7 +649,7 @@ function ExportButton({ exporting, onClick }: ExportButtonProps) {
         fontFamily: mono,
         fontSize: "11px",
         letterSpacing: "0.15em",
-        textTransform: "uppercase" as const,
+        textTransform: "uppercase",
         cursor: exporting ? "not-allowed" : "pointer",
         transition: "all 0.2s",
         display: "flex",
