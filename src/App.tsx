@@ -616,6 +616,17 @@ export default function App() {
             </div>
           </div>
         </div>
+        <p style={{ 
+           fontSize: "10px", 
+           color: "#64748b", 
+           marginTop: "32px", 
+           textAlign: "center", 
+           textTransform: "uppercase", 
+           letterSpacing: "0.1em", 
+           opacity: 0.5 
+         }}>
+           // SYSTEM NOTICE: For informational purposes only. Consult a professional before starting any protocol.
+         </p>
       </div>
     </>
   );
